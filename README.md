@@ -1,4 +1,3 @@
-A simple command-line application.
+Command line application to solve Tetonor puzzles, as printed in The Times.
 
-Created from templates made available by Stagehand under a BSD-style
-[license](https://github.com/dart-lang/stagehand/blob/master/LICENSE).
+Run the command Tetonor to get usage.
