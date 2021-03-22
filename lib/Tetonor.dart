@@ -1,7 +1,6 @@
 import 'dart:math';
 
-
-bool debug_print = false;
+bool debug_print = !true;
 
 class Pair {
   final int _lo, _hi;
@@ -90,7 +89,7 @@ class SolvedCell {
 }
 
 class SolvedOperand {
-  final int _operandIndex;
+  int _operandIndex;
   int get operandIndex => _operandIndex;
   final int _value;
   int get value => _value;
@@ -116,7 +115,9 @@ class Solution {
     copiedCells.sort((a, b) => a._cellIndex.compareTo(b._cellIndex));
     var cells = copiedCells.join(', ');
     var copiedOperands = List.from(_operands);
-    copiedOperands.sort((a, b) => a._operandIndex.compareTo(b._operandIndex));
+    // The operand index order may to correspond to value order because of wildcards
+    // so we ignore the index order
+    copiedOperands.sort((a, b) => a._value.compareTo(b._value));
     var operands = copiedOperands.join(', ');
     return 'Cells:\n$cells\nOperands: $operands';
   }
@@ -241,6 +242,23 @@ class Tetonor {
     return;
   }
 
+  List<num> matchOperands(List<num> operandIndexes, int match) {
+    var exactMatch = operandIndexes
+        .firstWhere((i) => _operands[i].value == match, orElse: () => -1);
+    var wildcardMatch = operandIndexes.firstWhere(
+        (i) => _operands[i].value == 0 && _operands[i].matches(match),
+        orElse: () => -1);
+    var matches = <num>[];
+    if (exactMatch != -1) {
+      matches.add(exactMatch);
+    }
+    if (wildcardMatch != -1) {
+      matches.add(wildcardMatch);
+    }
+    return matches;
+    // return operandIndexes.where((i) => _operands[i].matches(match)).toList();
+  }
+
   Iterable<Solution> solveIndexes(
       List<int> productCellIndexes,
       List<int> sumCellIndexes,
@@ -260,13 +278,12 @@ class Tetonor {
       var sumIndex = sumCellIndexes[sumIndexIndex];
       sumCellIndexes.removeAt(sumIndexIndex);
 
-      // Find operands that match the pair (process duplicates in case of wildcards)
-      var loOperandIndexList =
-          operandIndexes.where((i) => _operands[i].matches(pair.lo));
+      // Find operands that match the pair (process an exact match and a wildcard match)
+      var loOperandIndexList = matchOperands(operandIndexes, pair.lo);
       operandLoop:
       for (var loOperandIndex in loOperandIndexList) {
-        var hiOperandIndexList = operandIndexes
-            .where((i) => i > loOperandIndex && _operands[i].matches(pair.hi));
+        var hiOperandIndexList = matchOperands(
+            operandIndexes.where((i) => i > loOperandIndex).toList(), pair.hi);
         for (var hiOperandIndex in hiOperandIndexList) {
           // Update solution
           var loOperand = SolvedOperand(loOperandIndex, pair.lo);
@@ -283,33 +300,15 @@ class Tetonor {
               'Add productCell=$productCell, sumCell=$sumCell lo=${pair.lo}, hi=${pair.hi}, loOp=$loOperandIndex, hiOp=$hiOperandIndex');
           // Finished?
           if (partial.cells.length == 16) {
-            var ok = true;
-            // Check operands are in numeric order
-            var copiedOperands = List<SolvedOperand>.from(partial.operands);
-            copiedOperands
-                .sort((a, b) => a._operandIndex.compareTo(b._operandIndex));
-            SolvedOperand previous;
-            for (var operand in copiedOperands) {
-              if (previous != null && previous.value > operand.value) {
-                ok = false;
-                break;
-              }
-              previous = operand;
-            }
-            if (ok) {
-              printDebug(
-                  'lo=${pair.lo}, hi=${pair.hi}, loOp=$loOperandIndex, hiOp=$hiOperandIndex');
-              yield partial;
-              // No need to process other operands as all solutions for these cells will be the same
-              // Undo soluion update
-              partial.removeLastCells();
-              printDebug('Remove Cells');
-              break operandLoop;
-            } else {
-              // Not a solution, fall through
-            }
-          }
-          if (partial.cells.length != 16) {
+            printDebug(
+                'lo=${pair.lo}, hi=${pair.hi}, loOp=$loOperandIndex, hiOp=$hiOperandIndex');
+            yield partial;
+            // No need to process other operands as all solutions for these cells will be the same
+            // Undo soluion update
+            partial.removeLastCells();
+            printDebug('Remove Cells');
+            break operandLoop;
+          } else {
             // Recurse with copy of operand indexes (cannot modify it)
             var newOperandIndexes = List<int>.from(operandIndexes
                 .where((i) => i != loOperandIndex && i != hiOperandIndex));
